@@ -63,7 +63,7 @@ type MsgClients struct {
 }
 
 func NewAtlasManager(cfg *config.Config) (*AtlasManager, error) {
-	// use Atlas Protocol encoding config
+	// use Atlas DePIN encoding config
 	encodingConfig := app.MakeEncodingConfig()
 
 	// create client context
