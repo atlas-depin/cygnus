@@ -94,7 +94,7 @@ func (app *App) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	app.eventCancel = cancel
 
-	// establish gRPC connection & initialize an Atlas Protocol wallet
+	// establish gRPC connection & initialize an Atlas DePIN wallet
 	if err := app.atlas.ConnectGRPC(); err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (app *App) Start() error {
 	defer app.api.Close()
 	log.Debug().Msg("api server started")
 
-	// start Atlas Protocol block height polling
+	// start Atlas DePIN block height polling
 	go app.atlas.PollBlockHeight(ctx, app.blockEventHandler)
 
 	// start Atlas event listener
@@ -207,7 +207,7 @@ func (app *App) blockEventHandler(ctx context.Context, height int64) {
 	}
 }
 
-// ensureProviderRegistration queries Atlas Protocol to determine whether this instance of Cygnus
+// ensureProviderRegistration queries Atlas DePIN to determine whether this instance of Cygnus
 // is a registered provider on-chain.
 func (app *App) ensureProviderRegistration(ctx context.Context) error {
 	queryProviderParams := &storageTypes.QueryProviderRequest{

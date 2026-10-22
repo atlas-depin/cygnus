@@ -54,8 +54,8 @@ func DefaultAPIConfig() APIConfig {
 func DefaultChainConfig() ChainConfig {
 	return ChainConfig{
 		ChainId:        "atlas-1",
-		RPCAddr:        "https://rpc.atlasprotocol.cloud",
-		GRPCAddr:       "grpc.atlasprotocol.cloud:443",
+		RPCAddr:        "https://rpc.atlasdepin.com",
+		GRPCAddr:       "grpc.atlasdepin.com:443",
 		GasPrice:       "0.03uatl",
 		GasAdjustment:  2.0,
 		KeyringBackend: "test",
