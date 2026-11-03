@@ -1,7 +1,7 @@
 package config
 
 var (
-	VERSION string
+	VERSION string = "0.1.2"
 	COMMIT  string
 )
 
