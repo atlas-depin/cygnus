@@ -1,6 +1,11 @@
 package config
 
-import "github.com/rs/zerolog"
+import (
+	"strings"
+	"time"
+
+	"github.com/rs/zerolog"
+)
 
 type Seed struct {
 	SeedPhrase     string `json:"seed_phrase"`
@@ -16,11 +21,48 @@ type ChainConfig struct {
 	GasAdjustment  float64 `yaml:"gas_adjustment" mapstructure:"gas_adjustment"`
 }
 
+// Upload buffer modes for APIConfig.UploadBufferMode.
+const (
+	// UploadBufferAuto streams to temp files only when max_upload_size is 0
+	// (i.e. unlimited). Bounded uploads are buffered in RAM.
+	UploadBufferAuto = "auto"
+	// UploadBufferMemory always buffers the entire request body in RAM.
+	// Fastest, but a single upload cannot exceed available memory.
+	UploadBufferMemory = "memory"
+	// UploadBufferDisk always streams, spilling multipart parts larger than
+	// 16MB to temp files. Lower memory, at the cost of extra disk I/O.
+	UploadBufferDisk = "disk"
+)
+
 type APIConfig struct {
-	Port             int64 `yaml:"port" mapstructure:"port"`
-	MaxUploadSize    int64 `yaml:"max_upload_size" mapstructure:"max_upload_size"`
-	PrioritizeProofs bool  `yaml:"pause_uploads_for_proofs" mapstructure:"pause_uploads_for_proofs"`
-	FsyncUploads     bool  `yaml:"fsync_uploads" mapstructure:"fsync_uploads"`
+	Port             int64  `yaml:"port" mapstructure:"port"`
+	MaxUploadSize    int64  `yaml:"max_upload_size" mapstructure:"max_upload_size"`
+	PrioritizeProofs bool   `yaml:"prioritize_proofs" mapstructure:"prioritize_proofs"`
+	FsyncUploads     bool   `yaml:"fsync_uploads" mapstructure:"fsync_uploads"`
+	UploadBufferMode string `yaml:"upload_buffer_mode" mapstructure:"upload_buffer_mode"`
+	TimeoutSeconds   int    `yaml:"timeout_seconds" mapstructure:"timeout_seconds"`
+}
+
+// Timeout resolves the configured timeout.
+func (c APIConfig) Timeout() time.Duration {
+	if c.TimeoutSeconds <= 0 {
+		return 0
+	}
+	return time.Duration(c.TimeoutSeconds) * time.Second
+}
+
+// StreamRequestBody reports whether the HTTP server should stream request
+// bodies to temp files instead of buffering them fully in RAM. An unset or
+// unrecognized UploadBufferMode falls back to "auto".
+func (c APIConfig) StreamRequestBody() bool {
+	switch strings.ToLower(strings.TrimSpace(c.UploadBufferMode)) {
+	case UploadBufferMemory:
+		return false
+	case UploadBufferDisk:
+		return true
+	default: // "", UploadBufferAuto
+		return c.MaxUploadSize <= 0
+	}
 }
 
 type Config struct {
@@ -44,16 +86,18 @@ type BaseConfig struct {
 func DefaultAPIConfig() APIConfig {
 	return APIConfig{
 		Port:             3333,
-		MaxUploadSize:    4 * 1024 * 1024 * 1024,
-		FsyncUploads:     false,
+		MaxUploadSize:    0,
+		FsyncUploads:     true,
 		PrioritizeProofs: true,
+		UploadBufferMode: UploadBufferAuto,
+		TimeoutSeconds:   1800,
 	}
 }
 
 // DefaultChainConfig returns the default ChainConfig with preset RPC & GRPC endpoints.
 func DefaultChainConfig() ChainConfig {
 	return ChainConfig{
-		ChainId:        "atlas-1",
+		ChainId:        "itineraria-1",
 		RPCAddr:        "https://rpc.atlasdepin.com",
 		GRPCAddr:       "grpc.atlasdepin.com:443",
 		GasPrice:       "0.03uatl",
@@ -87,6 +131,9 @@ func (c Config) MarshalZerologObject(e *zerolog.Event) {
 		Int64("API_Port", c.APICfg.Port).
 		Bool("API_FsyncUploads", c.APICfg.FsyncUploads).
 		Bool("API_PrioritizeProofs", c.APICfg.PrioritizeProofs).
+		Int64("API_MaxUploadSize", c.APICfg.MaxUploadSize).
+		Bool("API_StreamRequestBody", c.APICfg.StreamRequestBody()).
+		Dur("API_Timeout", c.APICfg.Timeout()).
 		Bool("CacheMerkleTrees", c.CacheMerkleTrees).
 		Bool("StraySweep_Enabled", c.StraySweep.Enabled)
 }

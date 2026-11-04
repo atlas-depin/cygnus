@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	yaml "gopkg.in/yaml.v3"
@@ -10,6 +11,13 @@ import (
 func (c BaseConfig) Validate() error {
 	if c.DataDirectory == "" {
 		return errors.New("invalid data directory")
+	}
+
+	switch strings.ToLower(strings.TrimSpace(c.APICfg.UploadBufferMode)) {
+	case "", UploadBufferAuto, UploadBufferMemory, UploadBufferDisk:
+	default:
+		return fmt.Errorf("invalid api_config.upload_buffer_mode %q (want %q, %q or %q)",
+			c.APICfg.UploadBufferMode, UploadBufferAuto, UploadBufferMemory, UploadBufferDisk)
 	}
 
 	return nil

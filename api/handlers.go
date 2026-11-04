@@ -59,7 +59,8 @@ func (h *Handler) UploadFile(c *fiber.Ctx) error {
 	if err != nil {
 		return respondError(c, fiber.StatusBadRequest, "no file uploaded")
 	}
-	if fileHeader.Size > h.config.APICfg.MaxUploadSize {
+	// MaxUploadSize <= 0 means no size limit.
+	if h.config.APICfg.MaxUploadSize > 0 && fileHeader.Size > h.config.APICfg.MaxUploadSize {
 		return respondError(c, fiber.StatusBadRequest, "file size exceeds limit")
 	}
 

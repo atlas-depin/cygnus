@@ -19,15 +19,27 @@ type API struct {
 	cfg  *config.APIConfig
 }
 
+// multipartOverheadSlack covers multipart boundaries and part headers that
+// make the raw request body slightly larger than the file itself.
+const multipartOverheadSlack = 1 * 1024 * 1024
+
 // NewAPI creates a new API instance using the provided API configuration.
 func NewAPI(cfg *config.APIConfig) *API {
+	// fasthttp treats maxBodySize <= 0 as "no limit", but fiber rewrites
+	// BodyLimit == 0 back to its 4MB default, so -1 is how to disable it.
+	bodyLimit := -1
+	if cfg.MaxUploadSize > 0 {
+		bodyLimit = int(cfg.MaxUploadSize + multipartOverheadSlack)
+	}
+
 	srv := fiber.New(fiber.Config{
 		AppName:                      "Cygnus DePIN Storage Provider",
-		ReadTimeout:                  5 * time.Minute,
-		WriteTimeout:                 5 * time.Minute,
-		IdleTimeout:                  5 * time.Minute,
+		ReadTimeout:                  cfg.Timeout(),
+		WriteTimeout:                 cfg.Timeout(),
+		IdleTimeout:                  cfg.Timeout(),
 		DisablePreParseMultipartForm: false,
-		BodyLimit:                    4 * 1024 * 1024 * 1024,
+		BodyLimit:                    bodyLimit,
+		StreamRequestBody:            cfg.StreamRequestBody(),
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			fmt.Println("ERROR:", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
