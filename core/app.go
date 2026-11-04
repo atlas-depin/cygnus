@@ -9,6 +9,8 @@ import (
 	"syscall"
 
 	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/atlas-depin/cygnus/api"
 	"github.com/atlas-depin/cygnus/atlas"
@@ -208,25 +210,34 @@ func (app *App) blockEventHandler(ctx context.Context, height int64) {
 }
 
 // ensureProviderRegistration queries Atlas DePIN to determine whether this instance of Cygnus
-// is a registered provider on-chain.
+// is a registered provider on-chain, registering it if it is not.
 func (app *App) ensureProviderRegistration(ctx context.Context) error {
+	address := app.atlas.Wallet.GetAddress()
 	queryProviderParams := &storageTypes.QueryProviderRequest{
-		Address: app.atlas.Wallet.GetAddress(),
+		Address: address,
 	}
 
 	res, err := app.atlas.QueryClients.Storage.Provider(ctx, queryProviderParams)
-	if err != nil {
-		log.Info().Err(err).Msg("Failed to query storage provider information.")
-		return err
-	}
+	switch {
+	case err != nil && status.Code(err) == codes.NotFound:
+		log.Info().
+			Str("address", address).
+			Msg("Provider is not registered on-chain. Creating storage provider...")
+		return app.registerProvider()
 
-	if res.Provider == nil {
-		log.Info().Err(err).Msg("Provider does not exist on network. Creating storage provider...")
-		if err := app.initProviderOnChain(); err != nil {
-			log.Error().Err(err).Msg("Failed to create storage provider:")
-			return err
-		}
-		return nil
+	case err != nil:
+		log.Error().
+			Str("address", address).
+			Err(err).
+			Msg("Failed to query storage provider information")
+		return fmt.Errorf("query provider %s: %w", address, err)
+
+	case res == nil || res.Provider == nil:
+		// Defensive
+		log.Info().
+			Str("address", address).
+			Msg("Provider does not exist on network. Creating storage provider...")
+		return app.registerProvider()
 	}
 
 	log.Debug().
@@ -251,6 +262,15 @@ func (app *App) ensureProviderRegistration(ctx context.Context) error {
 			Msg("Configured total space is less than on-chain available space")
 	}
 
+	return nil
+}
+
+// registerProvider registers this instance as a storage provider on-chain.
+func (app *App) registerProvider() error {
+	if err := app.initProviderOnChain(); err != nil {
+		log.Error().Err(err).Msg("Failed to create storage provider")
+		return err
+	}
 	return nil
 }
 
