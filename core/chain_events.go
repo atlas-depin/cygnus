@@ -9,18 +9,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	storageTypes "atlas/x/storage/types"
+	storageTypes "github.com/atlas-depin/atlas/x/storage/types"
 
-	"cygnus/atlas"
-	"cygnus/storage"
+	"github.com/atlas-depin/cygnus/atlas"
+	"github.com/atlas-depin/cygnus/storage"
 
 	"github.com/cosmos/cosmos-sdk/types/query"
 	"github.com/rs/zerolog/log"
 )
 
 const (
-	challengeRoundQueryAttempts       = 3
-	challengeRoundQueryDelay          = 1000 * time.Millisecond
+	challengeRoundQueryAttempts = 3
+	challengeRoundQueryDelay    = 1000 * time.Millisecond
 )
 
 // chainEventReceiver bridges atlas blockchain events to the storage manager.

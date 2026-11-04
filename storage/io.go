@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"cygnus/types"
+	"github.com/atlas-depin/cygnus/types"
 
 	"github.com/rs/zerolog/log"
 )

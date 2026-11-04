@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"cygnus/types"
+	"github.com/atlas-depin/cygnus/types"
 )
 
 func TestStreamFileToDiskAndCollectLeaves(t *testing.T) {

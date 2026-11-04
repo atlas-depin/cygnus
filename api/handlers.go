@@ -3,9 +3,9 @@ package api
 import (
 	"strconv"
 
-	"cygnus/config"
-	"cygnus/storage"
-	"cygnus/types"
+	"github.com/atlas-depin/cygnus/config"
+	"github.com/atlas-depin/cygnus/storage"
+	"github.com/atlas-depin/cygnus/types"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog/log"

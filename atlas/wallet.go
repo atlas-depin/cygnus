@@ -20,11 +20,10 @@ import (
 
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
-	// Import from your local blockchain
-	"atlas/app"
+	"github.com/atlas-depin/atlas/app"
 
-	"cygnus/config"
-	"cygnus/types"
+	"github.com/atlas-depin/cygnus/config"
+	"github.com/atlas-depin/cygnus/types"
 )
 
 type AtlasWallet struct {

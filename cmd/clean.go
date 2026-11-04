@@ -9,10 +9,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	"cygnus/atlas"
-	"cygnus/cmd/types"
-	"cygnus/config"
-	"cygnus/storage"
+	"github.com/atlas-depin/cygnus/atlas"
+	"github.com/atlas-depin/cygnus/cmd/types"
+	"github.com/atlas-depin/cygnus/config"
+	"github.com/atlas-depin/cygnus/storage"
 )
 
 func CleanCmd() *cobra.Command {

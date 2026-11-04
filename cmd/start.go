@@ -4,8 +4,8 @@ import (
 	"os"
 	"time"
 
-	"cygnus/cmd/types"
-	"cygnus/core"
+	"github.com/atlas-depin/cygnus/cmd/types"
+	"github.com/atlas-depin/cygnus/core"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

@@ -3,11 +3,12 @@ package storage
 import (
 	"bytes"
 	"context"
-	"cygnus/types"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/atlas-depin/cygnus/types"
 
 	merkletree "github.com/ahm23/go-merkletree-xxh"
 	"github.com/rs/zerolog/log"

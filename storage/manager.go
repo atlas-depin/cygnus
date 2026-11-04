@@ -2,9 +2,6 @@ package storage
 
 import (
 	"context"
-	"cygnus/atlas"
-	"cygnus/config"
-	"cygnus/types"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -17,10 +14,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/atlas-depin/cygnus/atlas"
+	"github.com/atlas-depin/cygnus/config"
+	"github.com/atlas-depin/cygnus/types"
+
 	merkletree "github.com/ahm23/go-merkletree-xxh"
 	"github.com/rs/zerolog/log"
 
-	storageTypes "atlas/x/storage/types"
+	storageTypes "github.com/atlas-depin/atlas/x/storage/types"
 )
 
 type StorageManager struct {

@@ -9,11 +9,11 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	storagetypes "atlas/x/storage/types"
+	storagetypes "github.com/atlas-depin/atlas/x/storage/types"
 
-	"cygnus/atlas"
-	"cygnus/cmd/types"
-	"cygnus/config"
+	"github.com/atlas-depin/cygnus/atlas"
+	"github.com/atlas-depin/cygnus/cmd/types"
+	"github.com/atlas-depin/cygnus/config"
 )
 
 func SyncCmd() *cobra.Command {

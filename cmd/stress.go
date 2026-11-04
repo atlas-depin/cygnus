@@ -27,12 +27,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/zeebo/blake3"
 
-	storagetypes "atlas/x/storage/types"
+	storagetypes "github.com/atlas-depin/atlas/x/storage/types"
 
-	"cygnus/atlas"
-	"cygnus/cmd/types"
-	"cygnus/config"
-	cygnustypes "cygnus/types"
+	"github.com/atlas-depin/cygnus/atlas"
+	"github.com/atlas-depin/cygnus/cmd/types"
+	"github.com/atlas-depin/cygnus/config"
+	cygnustypes "github.com/atlas-depin/cygnus/types"
 )
 
 const (

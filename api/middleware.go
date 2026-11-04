@@ -1,10 +1,11 @@
 package api
 
 import (
-	storagetypes "atlas/x/storage/types"
-	"cygnus/config"
-	"cygnus/storage"
-	"cygnus/types"
+	"github.com/atlas-depin/cygnus/config"
+	"github.com/atlas-depin/cygnus/storage"
+	"github.com/atlas-depin/cygnus/types"
+
+	storagetypes "github.com/atlas-depin/atlas/x/storage/types"
 
 	"github.com/gofiber/fiber/v2"
 )

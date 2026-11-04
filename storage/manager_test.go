@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"cygnus/config"
-	"cygnus/types"
+	"github.com/atlas-depin/cygnus/config"
+	"github.com/atlas-depin/cygnus/types"
 )
 
 func newTestStorageManager(t *testing.T, totalSpace int64) *StorageManager {

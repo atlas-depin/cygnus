@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"atlas/app"
+	"github.com/atlas-depin/atlas/app"
 
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"

@@ -2,11 +2,12 @@ package api
 
 import (
 	"context"
-	"cygnus/config"
 	"errors"
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/atlas-depin/cygnus/config"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"

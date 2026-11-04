@@ -10,7 +10,7 @@ import (
 	wstypes "github.com/cometbft/cometbft/rpc/core/types"
 	"github.com/rs/zerolog/log"
 
-	"cygnus/config"
+	"github.com/atlas-depin/cygnus/config"
 )
 
 const (

@@ -10,12 +10,12 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"cygnus/api"
-	"cygnus/atlas"
-	"cygnus/config"
-	"cygnus/storage"
+	"github.com/atlas-depin/cygnus/api"
+	"github.com/atlas-depin/cygnus/atlas"
+	"github.com/atlas-depin/cygnus/config"
+	"github.com/atlas-depin/cygnus/storage"
 
-	storageTypes "atlas/x/storage/types"
+	storageTypes "github.com/atlas-depin/atlas/x/storage/types"
 )
 
 type App struct {

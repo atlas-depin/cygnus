@@ -8,11 +8,11 @@ import (
 	"sort"
 	"time"
 
-	storageTypes "atlas/x/storage/types"
+	storageTypes "github.com/atlas-depin/atlas/x/storage/types"
 
-	"cygnus/atlas"
-	"cygnus/config"
-	"cygnus/storage"
+	"github.com/atlas-depin/cygnus/atlas"
+	"github.com/atlas-depin/cygnus/config"
+	"github.com/atlas-depin/cygnus/storage"
 
 	"github.com/cosmos/cosmos-sdk/types/query"
 	"github.com/rs/zerolog/log"

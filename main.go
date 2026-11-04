@@ -1,7 +1,7 @@
 package main
 
 import (
-	"cygnus/cmd"
+	"github.com/atlas-depin/cygnus/cmd"
 )
 
 func main() {

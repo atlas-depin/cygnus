@@ -18,11 +18,12 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/rs/zerolog/log"
 
-	"atlas/app"
-	storagetypes "atlas/x/storage/types"
+	storagetypes "github.com/atlas-depin/atlas/x/storage/types"
 
-	"cygnus/config"
-	"cygnus/types"
+	"github.com/atlas-depin/atlas/app"
+
+	"github.com/atlas-depin/cygnus/config"
+	"github.com/atlas-depin/cygnus/types"
 )
 
 type AtlasManager struct {

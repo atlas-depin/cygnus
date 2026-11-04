@@ -1,9 +1,9 @@
 package api
 
 import (
-	"cygnus/atlas"
-	"cygnus/config"
-	"cygnus/storage"
+	"github.com/atlas-depin/cygnus/atlas"
+	"github.com/atlas-depin/cygnus/config"
+	"github.com/atlas-depin/cygnus/storage"
 
 	"github.com/gofiber/fiber/v2"
 )
