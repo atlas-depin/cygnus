@@ -15,8 +15,10 @@ func newTestStorageManager(t *testing.T, totalSpace int64) *StorageManager {
 	t.Helper()
 
 	cfg := &config.Config{
-		DataDirectory: t.TempDir(),
-		TotalSpace:    totalSpace,
+		BaseConfig: config.BaseConfig{
+			DataDirectory: t.TempDir(),
+			TotalSpace:    totalSpace,
+		},
 	}
 
 	sm, err := NewStorageManager(cfg, nil)
@@ -40,8 +42,10 @@ func TestInitialUsageIgnoresPebbleIndexFiles(t *testing.T) {
 	}
 
 	sm, err := NewStorageManager(&config.Config{
-		DataDirectory: dataDir,
-		TotalSpace:    10,
+		BaseConfig: config.BaseConfig{
+			DataDirectory: dataDir,
+			TotalSpace:    10,
+		},
 	}, nil)
 	if err != nil {
 		t.Fatalf("NewStorageManager returned error: %v", err)

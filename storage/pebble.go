@@ -21,6 +21,9 @@ const (
 type PebbleStore struct {
 	db *pebble.DB
 	mu sync.RWMutex
+
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // NewPebbleStore creates a new PebbleDB store
@@ -38,9 +41,13 @@ func NewPebbleStore(dataDir string) (*PebbleStore, error) {
 	}, nil
 }
 
-// Close closes the PebbleDB connection
+// Close closes the PebbleDB connection. It is safe to call more than once:
+// pebble panics on a second Close, so the underlying close runs only once.
 func (ps *PebbleStore) Close() error {
-	return ps.db.Close()
+	ps.closeOnce.Do(func() {
+		ps.closeErr = ps.db.Close()
+	})
+	return ps.closeErr
 }
 
 // Set stores a key-value pair

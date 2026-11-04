@@ -12,6 +12,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	startMaxAttempts = 3
+	startRetryDelay  = 5 * time.Second
+)
+
 func StartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -41,21 +46,35 @@ func StartCmd() *cobra.Command {
 				log.Logger = log.Logger.Level(zerolog.ErrorLevel)
 			}
 
-			app, err := core.NewApp(home)
-			if err != nil {
-				return err
+			var startErr error
+			for attempt := 1; attempt <= startMaxAttempts; attempt++ {
+				// Build a fresh App for every attempt: Start() releases the
+				// storage engine and gRPC connection when it returns, so a
+				// failed instance can never be started again.
+				app, err := core.NewApp(home)
+				if err != nil {
+					startErr = err
+				} else {
+					startErr = app.Start()
+				}
+
+				if startErr == nil {
+					return nil
+				}
+
+				log.Err(startErr).Msg("Failed to start Cygnus.")
+				if attempt == startMaxAttempts {
+					break
+				}
+
+				log.Info().Msgf(
+					"Attempting restart in %d seconds (attempt %d of %d)...",
+					int(startRetryDelay.Seconds()), attempt+1, startMaxAttempts,
+				)
+				time.Sleep(startRetryDelay)
 			}
 
-			err = app.Start()
-
-			for restartAttempt := 1; restartAttempt <= 3 && err != nil; restartAttempt++ {
-				log.Err(err).Msg("Failed to start Cygnus.")
-				log.Info().Msgf("Attempting restart again in %d seconds (attempt %d of %d)...\n", 5, restartAttempt, 3)
-				time.Sleep(time.Second * 5)
-				err = app.Start()
-			}
-
-			return err
+			return startErr
 		},
 	}
 

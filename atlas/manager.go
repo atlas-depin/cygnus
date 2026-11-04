@@ -269,7 +269,10 @@ func (am *AtlasManager) Close() error {
 		am.Wallet.Stop()
 	}
 
-	am.clientCtx.GRPCClient.Close()
+	if conn := am.clientCtx.GRPCClient; conn != nil {
+		_ = conn.Close()
+		am.clientCtx.GRPCClient = nil
+	}
 
 	return nil
 }
