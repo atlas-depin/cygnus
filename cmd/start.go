@@ -1,23 +1,21 @@
 package cmd
 
 import (
-	"fmt"
+	"os"
 	"time"
 
-	"cygnus/cmd/types"
-	"cygnus/core"
+	"github.com/atlas-depin/cygnus/cmd/types"
+	"github.com/atlas-depin/cygnus/core"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
-const defaultMaxRestartAttempt = 60
-
 func StartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start",
-		Short: "Starts the provider",
+		Short: "Starts the storage provider",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			home, err := cmd.Flags().GetString(types.FlagHome)
 			if err != nil {
@@ -29,17 +27,16 @@ func StartCmd() *cobra.Command {
 				return err
 			}
 
-			maxRestartAttempt := 3
-			if maxRestartAttempt < 0 {
-				maxRestartAttempt = 0
-			}
+			cw := zerolog.ConsoleWriter{Out: os.Stderr}
+			log.Logger = zerolog.New(cw).With().Timestamp().Caller().Logger()
 
-			// Set log level BEFORE creating the app to ensure debug logs are visible
 			switch logLevel {
-			case "info":
-				log.Logger = log.Logger.Level(zerolog.InfoLevel)
 			case "debug":
 				log.Logger = log.Logger.Level(zerolog.DebugLevel)
+			case "info":
+				log.Logger = log.Logger.Level(zerolog.InfoLevel)
+			case "warn":
+				log.Logger = log.Logger.Level(zerolog.WarnLevel)
 			case "error":
 				log.Logger = log.Logger.Level(zerolog.ErrorLevel)
 			}
@@ -50,10 +47,11 @@ func StartCmd() *cobra.Command {
 			}
 
 			err = app.Start()
-			for restartAttempt := 0; restartAttempt < maxRestartAttempt && err != nil; restartAttempt++ {
-				fmt.Println(err)
-				fmt.Printf("Attempting restart again in a minute (attempt %d of %d)...\n", restartAttempt+1, maxRestartAttempt)
-				time.Sleep(time.Minute)
+
+			for restartAttempt := 1; restartAttempt <= 3 && err != nil; restartAttempt++ {
+				log.Err(err).Msg("Failed to start Cygnus.")
+				log.Info().Msgf("Attempting restart again in %d seconds (attempt %d of %d)...\n", 5, restartAttempt, 3)
+				time.Sleep(time.Second * 5)
 				err = app.Start()
 			}
 

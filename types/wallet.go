@@ -1,7 +1,7 @@
 package types
 
 import (
-	storagetypes "atlas/x/storage/types"
+	storagetypes "github.com/atlas-depin/atlas/x/storage/types"
 
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"

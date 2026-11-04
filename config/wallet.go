@@ -9,15 +9,22 @@ import (
 	"strings"
 	"time"
 
-	"atlas/app"
+	"github.com/atlas-depin/atlas/app"
 
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	"github.com/cosmos/go-bip39"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/term"
 )
+
+type WalletInfo struct {
+	Name      string `json:"name"`
+	Address   string `json:"address"`
+	CreatedAt string `json:"created_at"`
+}
 
 // InitWallet initializes a wallet
 func InitWallet(homeDir string) (*WalletInfo, error) {
@@ -27,8 +34,9 @@ func InitWallet(homeDir string) (*WalletInfo, error) {
 		return nil, err
 	}
 
+	log.Info().Str("type", cfg.ChainCfg.KeyringBackend).Msg("KEYRING BACKEND")
 	// Create keyring using YOUR blockchain's encoding
-	kr, err := createKeyring(cfg.HomeDir, cfg.ChainCfg.KeyringBackend)
+	kr, err := createKeyring(homeDir, cfg.ChainCfg.KeyringBackend)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create keyring: %w", err)
 	}
@@ -153,7 +161,7 @@ func createNewWallet(kr keyring.Keyring, name, homeDir string) (*WalletInfo, err
 	fmt.Printf("  Name: %s\n", name)
 	fmt.Printf("  Address: %s\n", addr.String())
 
-	fmt.Println("\n⚠️  IMPORTANT: Save this mnemonic phrase in a secure location!")
+	fmt.Println("\n IMPORTANT: Save this mnemonic phrase in a secure location!")
 	fmt.Println("   It cannot be recovered if lost.")
 	fmt.Println("   " + mnemonic)
 	fmt.Println("")
@@ -284,7 +292,7 @@ func LoadWalletInfo(homeDir string) (*WalletInfo, error) {
 
 // GetKeyring returns a keyring instance for the given config
 func GetKeyring(cfg *Config) (keyring.Keyring, error) {
-	return createKeyring(cfg.HomeDir, cfg.ChainCfg.KeyringBackend)
+	return createKeyring(cfg.HomeDirectory, cfg.ChainCfg.KeyringBackend)
 }
 
 // VerifyWalletPassword verifies a wallet's password

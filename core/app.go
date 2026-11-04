@@ -5,213 +5,271 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/rs/zerolog/log"
-	"go.uber.org/zap"
 
-	"cygnus/api"
-	"cygnus/atlas"
-	"cygnus/config"
-	"cygnus/storage"
+	"github.com/atlas-depin/cygnus/api"
+	"github.com/atlas-depin/cygnus/atlas"
+	"github.com/atlas-depin/cygnus/config"
+	"github.com/atlas-depin/cygnus/storage"
 
-	storageTypes "atlas/x/storage/types"
+	storageTypes "github.com/atlas-depin/atlas/x/storage/types"
 )
 
 type App struct {
 	cfg            *config.Config
-	log            *zap.Logger
 	home           string
 	api            *api.API
 	atlas          *atlas.AtlasManager
 	storageManager *storage.StorageManager
 	eventListener  *atlas.EventListener
 	eventCancel    context.CancelFunc
-	// q            *queue.Queue
-	// prover       *proofs.Prover
-	// monitor    *monitoring.Monitor
-	// fileSystem *file_system.FileSystem
+	chainReceiver  *chainEventReceiver
+	straySweeper   *StraySweeper
 }
 
-// NewApp initializes and returns a new App instance using the provided home directory.
-// It sets up configuration, data directories, database, IPFS datastore and blockstore, API server, wallet, and file system.
-// Returns the initialized App or an error if any component fails to initialize.
 func NewApp(home string) (*App, error) {
 	cfg, err := config.Init(home)
 	if err != nil {
 		return nil, err
 	}
-	logger, err := zap.NewDevelopment()
 
 	dataDir := os.ExpandEnv(cfg.DataDirectory)
+	if err := os.MkdirAll(dataDir, os.ModePerm); err != nil {
+		return nil, err
+	}
 
-	err = os.MkdirAll(dataDir, os.ModePerm)
+	// initialize managers
+	am, err := atlas.NewAtlasManager(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize PebbleDB for metadata
-	// storageDB, err := storage.NewPebbleStore(cfg.HomeDir)
-	// if err != nil {
-	// 	log.Fatal().Err(err)
-	// }
-	// defer storageDB.Close()
-
-	// wc, err := config.InitWallet(home)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// log.Info().Str("provider_address", wc.Address).Send()
-	// log.Info().Str("home", home).Send()
-
-	am, err := atlas.NewAtlasManager(cfg, logger)
+	sm, err := storage.NewStorageManager(cfg, am)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize storage manager
-	storageManager, err := storage.NewStorageManager(cfg, logger, am)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-
+	// initialize api server
 	apiServer := api.NewAPI(&cfg.APICfg)
-	apiServer.SetupRoutes(cfg, logger, am, storageManager)
+	apiServer.SetupRoutes(cfg, am, sm)
 
-	receiver := &chainEventReceiver{atlas: am, storage: storageManager}
-	eventListener, err := atlas.NewEventListener(cfg, logger, receiver)
+	// initialize event listener
+	receiver := &chainEventReceiver{
+		atlas:       am,
+		storage:     sm,
+		proofRounds: make(map[int64]struct{}),
+	}
+	eventListener, err := atlas.NewEventListener(cfg, receiver)
 	if err != nil {
 		log.Warn().Err(err).Msg("Chain event listener not started (RPC may be unavailable)")
 		eventListener = nil
 	}
 
+	// initialize stray-file sweeper (nil lister until chain query is wired)
+	straySweeper := NewStraySweeper(&cfg.StraySweep, sm, am)
+
 	return &App{
 		cfg:            cfg,
-		log:            logger,
 		home:           home,
 		atlas:          am,
 		api:            apiServer,
-		storageManager: storageManager,
+		storageManager: sm,
 		eventListener:  eventListener,
+		chainReceiver:  receiver,
+		straySweeper:   straySweeper,
 	}, nil
 }
 
+// Start starts the storage provider.
 func (app *App) Start() error {
+	defer app.storageManager.Close()
+	defer app.atlas.Close()
 	log.Info().Msg("Starting Cygnus...")
 	log.Debug().Object("config", app.cfg).Msg("cygnus config")
 
-	app.genTestFile()
+	// create app context
+	ctx, cancel := context.WithCancel(context.Background())
+	app.eventCancel = cancel
 
+	// establish gRPC connection & initialize an Atlas DePIN wallet
 	if err := app.atlas.ConnectGRPC(); err != nil {
 		return err
 	}
 	if err := app.atlas.ConnectWallet(); err != nil {
 		return err
 	}
+	log.Debug().Msg("wallet connected")
 
-	queryProviderParams := &storageTypes.QueryProviderRequest{
-		Address: app.atlas.Wallet.GetAddress(),
+	// fetch storage module params from chain
+	if err := app.atlas.RefreshStorageParams(ctx); err != nil {
+		log.Warn().Err(err).Msg("Failed to fetch storage module params; using defaults")
 	}
-	cl := app.atlas.QueryClients.Storage
+	app.chainReceiver.SetProofRoundBlocks(int64(app.atlas.GetProofRoundBlocks()))
 
-	res, err := cl.Provider(context.Background(), queryProviderParams)
-	if err != nil || res.Provider == nil {
-		log.Info().Err(err).Msg("Provider does not exist on network or is not connected...")
-		err := initProviderOnChain(app.atlas.Wallet, app.cfg.Ip, app.cfg.TotalSpace)
-		if err != nil {
-			log.Error().Err(err)
-			return err
-		}
-	} else {
-		log.Info().Str("res", res.String()).Send()
-		log.Info().
-			Str("address", res.Provider.Address).
-			Str("hostname", res.Provider.Hostname).
-			Int64("created_at", res.Provider.CreatedAt).
-			Int64("space_available", res.Provider.SpaceAvailable).
-			Int64("space_used", res.Provider.SpaceUsed).
-			Msg("provider query result")
-
-		// claimers = res.Provider.AuthClaimers
-
-		// totalSpace, err := strconv.ParseInt(res.Provider.Totalspace, 10, 64)
-		// if err != nil {
-		// 	return err
-		// }
-		// if totalSpace != cfg.TotalSpace {
-		// 	err := updateSpace(app.wallet, cfg.TotalSpace)
-		// 	if err != nil {
-		// 		return err
-		// 	}
-		// }
-		// if res.Provider.Ip != cfg.Ip {
-		// 	err := updateIp(app.wallet, cfg.Ip)
-		// 	if err != nil {
-		// 		return err
-		// 	}
-		// }
+	// validate that the provider is registered on-chain
+	if err := app.ensureProviderRegistration(ctx); err != nil {
+		return err
 	}
 
-	// Starting concurrent services
-	app.log.Info("Starting API Server...")
+	// start Cygnus API server
 	go app.api.Serve()
+	defer app.api.Close()
+	log.Debug().Msg("api server started")
 
+	// start Atlas DePIN block height polling
+	go app.atlas.PollBlockHeight(ctx, app.blockEventHandler)
+
+	// start Atlas event listener
 	if app.eventListener != nil {
-		ctx, cancel := context.WithCancel(context.Background())
-		app.eventCancel = cancel
 		go func() {
 			if err := app.eventListener.Start(ctx); err != nil && ctx.Err() == nil {
-				app.log.Error("Chain event listener stopped with error", zap.Error(err))
+				log.Error().Err(err).Msg("Chain event listener stopped with error")
 			}
 		}()
 	}
-	// go app.prover.Start()
-	// go app.strayManager.Start(app.fileSystem, app.q, myUrl, params.ChunkSize)
+	log.Debug().Msg("atlas event listener started")
 
-	done := make(chan os.Signal, 1)
-	defer signal.Stop(done)
+	// initial provider cache refresh
+	if err := app.atlas.RefreshProviders(ctx); err != nil {
+		log.Warn().Err(err).Msg("Initial provider cache refresh failed")
+	}
 
-	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
-	<-done // Will block here until user hits ctrl+c
+	// start stray-file sweeper
+	if app.straySweeper != nil {
+		go app.straySweeper.Run(ctx)
+	}
 
-	fmt.Println("Shutting cygnus down safely...")
+	// catch up on any missed challenge round after restart
+	{
+		currentHeight, err := app.atlas.GetLatestBlockHeight(ctx)
+		if err == nil {
+			proofRoundBlocks := int64(app.atlas.GetProofRoundBlocks())
+			if proofRoundBlocks == 0 {
+				proofRoundBlocks = 180
+			}
+			app.chainReceiver.catchUpChallengeRound(ctx, currentHeight, proofRoundBlocks)
+		} else {
+			log.Warn().Err(err).Msg("Failed to get current height for challenge round catch-up")
+		}
+	}
 
+	// create & configure shutdown signal
+	shutdown := make(chan os.Signal, 1)
+	defer signal.Stop(shutdown)
+	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
+
+	// await shutdown
+	log.Info().Msg("Cygnus is READY!")
+	<-shutdown
+
+	// shutdown proceedure
+	log.Info().Msg("Shutting Cygnus down safely...")
 	if app.eventCancel != nil {
 		app.eventCancel()
 	}
 	if app.eventListener != nil {
 		app.eventListener.Stop()
 	}
-	_ = app.storageManager.Close()
-	_ = app.api.Close()
 	return nil
 }
 
-func initProviderOnChain(wallet *atlas.AtlasWallet, ip string, totalSpace int64) error {
-	msg := &storageTypes.MsgRegisterProvider{
-		Creator:  wallet.GetAddress(),
-		Hostname: ip,
-		Capacity: totalSpace,
+// blockEventHandler is meant to be run at every height to handle
+// height-dependent actions such as challenge round start actions.
+func (app *App) blockEventHandler(ctx context.Context, height int64) {
+	app.chainReceiver.OnNewBlock(ctx, height)
+	proofRoundBlocks := int64(app.atlas.GetProofRoundBlocks())
+	if proofRoundBlocks == 0 {
+		proofRoundBlocks = 180
+	}
+	proofWindowBlocks := int64(app.atlas.GetProofWindowBlocks())
+
+	// refresh provider cache and sweep stale files at proof window boundaries
+	if proofWindowBlocks > 0 && height > 0 && height%proofWindowBlocks == 0 {
+		if err := app.atlas.RefreshProviders(ctx); err != nil {
+			log.Warn().Err(err).Msg("Provider cache refresh failed at window boundary")
+		}
+		app.storageManager.CleanStaleFiles(ctx, height, proofWindowBlocks)
 	}
 
-	resp, err := wallet.BroadcastTxGrpc(3, true, msg)
+	roundHeight := height - 1
+	if height >= 0 && roundHeight%proofRoundBlocks == 0 {
+		round := strconv.FormatInt(roundHeight/proofRoundBlocks, 10)
+		if err := app.chainReceiver.OnStartProofRound(ctx, roundHeight, round); err != nil {
+			log.Error().
+				Int64("height", roundHeight).
+				Str("round", round).
+				Err(err).
+				Msg("new challenge round handler failed")
+		}
+	}
+}
+
+// ensureProviderRegistration queries Atlas DePIN to determine whether this instance of Cygnus
+// is a registered provider on-chain.
+func (app *App) ensureProviderRegistration(ctx context.Context) error {
+	queryProviderParams := &storageTypes.QueryProviderRequest{
+		Address: app.atlas.Wallet.GetAddress(),
+	}
+
+	res, err := app.atlas.QueryClients.Storage.Provider(ctx, queryProviderParams)
+	if err != nil {
+		log.Info().Err(err).Msg("Failed to query storage provider information.")
+		return err
+	}
+
+	if res.Provider == nil {
+		log.Info().Err(err).Msg("Provider does not exist on network. Creating storage provider...")
+		if err := app.initProviderOnChain(); err != nil {
+			log.Error().Err(err).Msg("Failed to create storage provider:")
+			return err
+		}
+		return nil
+	}
+
+	log.Debug().
+		Str("address", res.Provider.Address).
+		Str("hostname", res.Provider.Hostname).
+		Int64("created_at", res.Provider.CreatedAt).
+		Int64("space_available", res.Provider.SpaceAvailable).
+		Int64("space_used", res.Provider.SpaceUsed).
+		Msg("Provider information:")
+
+	// TODO: add a "run `cygnus sync` to sync local config to on-chain parameters", once cygnus sync is implemented
+	if res.Provider.Hostname != app.cfg.Ip {
+		log.Warn().
+			Str("chain_hostname", res.Provider.Hostname).
+			Str("configured_hostname", app.cfg.Ip).
+			Msg("Provider hostname differs from local config")
+	}
+	if res.Provider.SpaceAvailable > app.cfg.TotalSpace {
+		log.Warn().
+			Int64("chain_space_available", res.Provider.SpaceAvailable).
+			Int64("configured_total_space", app.cfg.TotalSpace).
+			Msg("Configured total space is less than on-chain available space")
+	}
+
+	return nil
+}
+
+// initProviderOnChain registers the provider's information on-chain.
+func (app *App) initProviderOnChain() error {
+	msg := &storageTypes.MsgRegisterProvider{
+		Creator:  app.atlas.Wallet.GetAddress(),
+		Hostname: app.cfg.Ip,
+		Capacity: app.cfg.TotalSpace,
+	}
+
+	resp, err := app.atlas.Wallet.BroadcastTxGrpc(3, true, msg)
 	if err != nil {
 		return fmt.Errorf("failed to broadcast transaction: %w", err)
 	}
-
 	if resp.Code != 0 {
 		return fmt.Errorf("transaction failed: %s", resp.RawLog)
 	}
 
-	fmt.Printf("Provider registered! Tx hash: %s\n", resp.TxHash)
+	log.Info().Str("Tx Hash", resp.TxHash).Msg("Provider registered!")
 	return nil
-}
-
-// [TODO]: rmeove this when doen with CLI tesdting
-func (app *App) genTestFile() {
-	file, _ := os.ReadFile("go.mod")
-
-	tree, _ := app.storageManager.BuildMerkleTree(context.Background(), file)
-
-	fmt.Printf("Merkle Root: %x\n", tree.Root)
 }

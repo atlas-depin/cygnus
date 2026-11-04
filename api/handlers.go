@@ -1,71 +1,129 @@
 package api
 
 import (
-	"cygnus/config"
-	"cygnus/storage"
-	"cygnus/types"
-	"fmt"
+	"strconv"
+
+	"github.com/atlas-depin/cygnus/config"
+	"github.com/atlas-depin/cygnus/storage"
+	"github.com/atlas-depin/cygnus/types"
 
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
+	"github.com/rs/zerolog/log"
 )
 
 type Handler struct {
 	storageManager *storage.StorageManager
-	logger         *zap.Logger
 	config         *config.Config
 }
 
-func NewHandler(storageManager *storage.StorageManager, logger *zap.Logger, cfg *config.Config) *Handler {
+func NewHandler(storageManager *storage.StorageManager, cfg *config.Config) *Handler {
 	return &Handler{
 		storageManager: storageManager,
-		logger:         logger,
 		config:         cfg,
 	}
 }
 
-func (h *Handler) UploadFile(c *fiber.Ctx) error {
-	fmt.Println("Request validation...")
-	// ---- Request Validation ---- //
-	// REQUIRED: fileId
-	fileId := c.FormValue("fid", "")
-	if fileId == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(types.APIResponse{
-			Success: false,
-			Error:   "No file id provided",
-		})
-	}
-	// REQUIRED: file
-	fileHeader, err := c.FormFile("file")
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(types.APIResponse{
-			Success: false,
-			Error:   "No file uploaded",
-		})
-	}
-	// REQUIRED: file size < MaxUploadSize
-	if fileHeader.Size > h.config.APICfg.MaxUploadSize {
-		return c.Status(fiber.StatusBadRequest).JSON(types.APIResponse{
-			Success: false,
-			Error:   "File size exceeds limit",
-		})
-	}
+func respondError(c *fiber.Ctx, status int, message string) error {
+	return c.Status(status).JSON(types.APIResponse{
+		Success: false,
+		Error:   message,
+	})
+}
 
-	// ---- Request Handling ---- //
-	fmt.Println("Creating File...", fileId)
-	metadata, err := h.storageManager.CreateFile(c.Context(), fileId, fileHeader)
-	if err != nil {
-		fmt.Println(err)
-		h.logger.Error("Failed to upload file", zap.Error(err))
-		return c.Status(fiber.StatusInternalServerError).JSON(types.APIResponse{
-			Success: false,
-			Error:   "Failed to upload file",
-		})
-	}
-
+func respondSuccess(c *fiber.Ctx, data interface{}, message string) error {
 	return c.JSON(types.APIResponse{
 		Success: true,
-		Data:    metadata,
-		Message: "File uploaded successfully",
+		Data:    data,
+		Message: message,
 	})
+}
+
+func parsePositiveInt(value string, fallback int) int {
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 1 {
+		return fallback
+	}
+	return parsed
+}
+
+func (h *Handler) UploadFile(c *fiber.Ctx) error {
+	fileID := c.FormValue("fid", "")
+	if fileID == "" {
+		return respondError(c, fiber.StatusBadRequest, "no file id provided")
+	}
+
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		return respondError(c, fiber.StatusBadRequest, "no file uploaded")
+	}
+	if fileHeader.Size > h.config.APICfg.MaxUploadSize {
+		return respondError(c, fiber.StatusBadRequest, "file size exceeds limit")
+	}
+
+	metadata, err := h.storageManager.CreateFile(c.Context(), fileID, fileHeader)
+	if err != nil {
+		log.Error().Str("file_id", fileID).Err(err).Msg("Failed to upload file")
+		return respondError(c, fiber.StatusInternalServerError, err.Error())
+	}
+
+	return respondSuccess(c, metadata, "file uploaded successfully")
+}
+
+func (h *Handler) ListFiles(c *fiber.Ctx) error {
+	page := parsePositiveInt(c.Query("page"), 1)
+	pageSize := parsePositiveInt(c.Query("page_size"), 25)
+
+	files, err := h.storageManager.ListFiles(c.Context(), page, pageSize)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to list files")
+		return respondError(c, fiber.StatusInternalServerError, "failed to list files")
+	}
+
+	return respondSuccess(c, files, "files retrieved successfully")
+}
+
+func (h *Handler) GetFile(c *fiber.Ctx) error {
+	fileID := c.Params("id")
+	metadata, _, err := h.storageManager.GetFile(c.Context(), fileID)
+	if err != nil {
+		return respondError(c, fiber.StatusNotFound, err.Error())
+	}
+
+	return respondSuccess(c, metadata, "file metadata retrieved successfully")
+}
+
+func (h *Handler) DownloadFile(c *fiber.Ctx) error {
+	fileID := c.Params("id")
+	metadata, err := h.storageManager.GetFileMetadata(c.Context(), fileID)
+	if err != nil {
+		return respondError(c, fiber.StatusNotFound, err.Error())
+	}
+	filePath, err := h.storageManager.GetFilePath(fileID)
+	if err != nil {
+		return respondError(c, fiber.StatusNotFound, err.Error())
+	}
+
+	if err != nil {
+		return respondError(c, fiber.StatusInternalServerError, err.Error())
+	}
+
+	c.Set(fiber.HeaderContentDisposition, "attachment; filename=\""+metadata.FileName+"\"")
+	return c.SendFile(filePath)
+}
+
+func (h *Handler) HealthCheck(c *fiber.Ctx) error {
+	return respondSuccess(c, fiber.Map{"status": "ok"}, "provider is healthy")
+}
+
+func (h *Handler) GetStatus(c *fiber.Ctx) error {
+	status, err := h.storageManager.GetStatus()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get provider status")
+		return respondError(c, fiber.StatusInternalServerError, "failed to get provider status")
+	}
+
+	return respondSuccess(c, status, "provider status retrieved successfully")
 }

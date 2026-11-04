@@ -1,45 +1,36 @@
 package api
 
 import (
-	"cygnus/atlas"
-	"cygnus/config"
-	"cygnus/storage"
+	"github.com/atlas-depin/cygnus/atlas"
+	"github.com/atlas-depin/cygnus/config"
+	"github.com/atlas-depin/cygnus/storage"
 
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
 )
 
-func (a *API) SetupRoutes(cfg *config.Config, logger *zap.Logger, atlas *atlas.AtlasManager, storageManager *storage.StorageManager) {
-	handler := NewHandler(storageManager, logger, cfg)
-
+func (a *API) SetupRoutes(cfg *config.Config, atlas *atlas.AtlasManager, storageManager *storage.StorageManager) {
+	handler := NewHandler(storageManager, cfg)
 	middleware := Middleware{
-		&atlas.QueryClients,
+		AtlasQueryClients: &atlas.QueryClients,
+		StorageManager:    storageManager,
+		Config:            cfg,
 	}
 
-	// API group with auth middleware
 	api := a.srv.Group("/api/v1")
-	// api.Use(AuthMiddleware(cfg))
-	// api.Use(FileSizeLimitMiddleware(cfg.Storage.MaxUploadSize))
 
-	// File operations
+	api.Get("/health", handler.HealthCheck)
+	api.Get("/status", handler.GetStatus)
+	api.Get("/files", handler.ListFiles)
+	api.Get("/files/:id", handler.GetFile)
+
+	api.Get("/download/:id", handler.DownloadFile)
 	api.Post("/upload",
-		middleware.ValidateSufficientStorage,
 		middleware.ValidateStagedFileExists,
 		handler.UploadFile)
-
-	// api.Get("/files", handler.ListFiles)
-	// api.Get("/files/:id", handler.GetFile)
-	// api.Get("/files/:id/download", handler.DownloadFile)
-	// api.Delete("/files/:id", handler.DeleteFile)
-	// api.Get("/files/stats", handler.GetFileStats)
-
-	// app.Get("/health", handler.HealthCheck)
-	// app.Get("/status", handler.GetStatus) // Public status endpoint
 }
 
-// SetupSwagger for API documentation (optional)
+// SetupSwagger for API documentation (optional).
 func SetupSwagger(app *fiber.App) {
-	// Add swagger UI if needed
 	app.Get("/docs", func(c *fiber.Ctx) error {
 		return c.SendString("API Documentation - Add Swagger UI here")
 	})

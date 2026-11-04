@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/pebble"
-	"go.uber.org/zap"
 )
 
 const (
@@ -20,13 +19,12 @@ const (
 
 // PebbleStore wraps PebbleDB for storing file metadata and merkle trees
 type PebbleStore struct {
-	db     *pebble.DB
-	logger *zap.Logger
-	mu     sync.RWMutex
+	db *pebble.DB
+	mu sync.RWMutex
 }
 
 // NewPebbleStore creates a new PebbleDB store
-func NewPebbleStore(dataDir string, logger *zap.Logger) (*PebbleStore, error) {
+func NewPebbleStore(dataDir string) (*PebbleStore, error) {
 	dbPath := filepath.Join(dataDir, "index")
 
 	opts := &pebble.Options{}
@@ -36,8 +34,7 @@ func NewPebbleStore(dataDir string, logger *zap.Logger) (*PebbleStore, error) {
 	}
 
 	return &PebbleStore{
-		db:     db,
-		logger: logger,
+		db: db,
 	}, nil
 }
 
